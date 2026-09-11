@@ -6,6 +6,7 @@ from dataclasses import dataclass
 # ============================================================
 # AADU PULI AATTAM
 # Digital Tiger and Goat Strategy Game
+# Version 2.0 - UI improvements, move counter, and hint system
 #
 # Player  : Goats
 # Computer: Tigers
@@ -16,6 +17,7 @@ from dataclasses import dataclass
 # Controls:
 #   Mouse       -> Select and move goats
 #   R           -> Restart
+#   H           -> Show a move hint
 #   ESC         -> Exit
 # ============================================================
 
@@ -254,12 +256,14 @@ class GameState:
 
     goats_placed: int
     goats_captured: int
+    moves: int
 
     phase: str
     turn: str
     status: str
 
     selected_goat: int | None
+    hint_goat: int | None
 
 
 # ============================================================
@@ -589,7 +593,9 @@ class AaduPuliAattam:
 
             self.state.goats.add(node)
 
+            self.state.moves += 1
             self.state.selected_goat = None
+            self.state.hint_goat = None
 
             self.state.turn = AI_TURN
 
@@ -620,6 +626,37 @@ class AaduPuliAattam:
         self.message = (
             "Invalid move. Select a goat again."
         )
+
+    # ========================================================
+    # PLAYER HINT
+    # ========================================================
+
+    def show_hint(self):
+
+        if self.state.status == GAME_OVER:
+            return
+
+        if self.state.phase != PLAY_PHASE:
+            self.message = "Finish placing all goats first."
+            return
+
+        if self.state.turn != PLAYER_TURN:
+            self.message = "Wait for the tiger to finish its move."
+            return
+
+        movable_goats = [
+            goat
+            for goat in self.state.goats
+            if self.get_goat_moves(goat)
+        ]
+
+        if not movable_goats:
+            self.message = "No goat currently has a legal move."
+            self.state.hint_goat = None
+            return
+
+        self.state.hint_goat = random.choice(movable_goats)
+        self.message = "Hint: try moving the highlighted goat."
 
     # ========================================================
     # TIGER AI
@@ -729,6 +766,7 @@ class AaduPuliAattam:
         # ----------------------------------------------------
 
         self.state.turn = PLAYER_TURN
+        self.state.hint_goat = None
 
         self.check_winner()
 
@@ -839,7 +877,7 @@ class AaduPuliAattam:
         )
 
         subtitle = SMALL_FONT.render(
-            "You = GOATS    |    Computer = TIGERS",
+            "You = GOATS    |    Computer = TIGERS    |    H = Hint",
             True,
             BOARD_COLOR
         )
@@ -929,6 +967,21 @@ class AaduPuliAattam:
         # ----------------------------------------------------
         # Draw goats
         # ----------------------------------------------------
+
+        if (
+            self.state.hint_goat is not None
+            and self.state.hint_goat in self.state.goats
+        ):
+
+            hx, hy = NODE_POSITIONS[self.state.hint_goat]
+
+            pygame.draw.circle(
+                screen,
+                HIGHLIGHT,
+                (hx, hy),
+                31,
+                4
+            )
 
         for goat in self.state.goats:
 
@@ -1028,6 +1081,12 @@ class AaduPuliAattam:
             f"{self.state.goats_captured}/"
             f"{TIGER_WIN_CAPTURE_COUNT}",
             (50, 675),
+            SMALL_FONT
+        )
+
+        self.draw_text(
+            f"Moves: {self.state.moves}",
+            (190, 675),
             SMALL_FONT
         )
 
@@ -1196,6 +1255,11 @@ def main():
                 if event.key == pygame.K_r:
 
                     game.reset()
+
+                # Hint
+                elif event.key == pygame.K_h:
+
+                    game.show_hint()
 
                 # Exit
                 elif event.key == pygame.K_ESCAPE:
